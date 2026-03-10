@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LED Matrix Lift Display</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #0D0D0B;
+  background-image: radial-gradient(ellipse at 50% 40%, #141410 0%, #090908 100%);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  gap: 7px;
+}
+
+.resort-tag {
+  font-family: monospace;
+  font-size: 8px;
+  letter-spacing: 5px;
+  color: #252520;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(340px, 92vw);
+}
+
+.housing {
+  position: relative;
+  background: linear-gradient(175deg, #1D1D19 0%, #131310 100%);
+  border-radius: 5px;
+  padding: 11px 15px 20px;
+  border: 1px solid #272722;
+  box-shadow:
+    0 0 0 1px #080807,
+    0 4px 18px rgba(0,0,0,0.75),
+    inset 0 1px 0 rgba(255,255,255,0.035);
+}
+
+.housing canvas {
+  display: block;
+  width: 100%;
+  border-radius: 2px;
+  background: #030201;
+}
+
+/* Four corner screws */
+.s { position:absolute; width:8px; height:8px; border-radius:50%;
+     background: radial-gradient(circle at 38% 35%, #3D3D33, #191915);
+     box-shadow: inset 0 1px 2px rgba(0,0,0,0.85), 0 1px 0 rgba(255,255,255,0.06); }
+.s::after { content:''; position:absolute; top:50%; left:12%; right:12%;
+            height:1px; background:rgba(0,0,0,0.55); transform:translateY(-50%) rotate(42deg); }
+.s.tl { top:5px;    left:5px;  }
+.s.tr { top:5px;    right:5px; }
+.s.bl { bottom:5px; left:5px;  }
+.s.br { bottom:5px; right:5px; }
+
+.unit-label {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: monospace;
+  font-size: 6px;
+  letter-spacing: 4px;
+  color: #1E1E18;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+</style>
+</head>
+<body>
+
+<div class="resort-tag">4 × 8×8 MAX7219 · 32×8 DOTS</div>
+<div class="panel-stack" id="stack"></div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════
+//  BITMAP FONT  — 5×7 (row strings, '#' = lit pixel)
+// ══════════════════════════════════════════════════════
+const FONT_SRC = {
+  ' ':['     ','     ','     ','     ','     ','     ','     '],
+  '!':['  #  ','  #  ','  #  ','  #  ','  #  ','     ','  #  '],
+  '#':[' # # ','#####',' # # ',' # # ','#####',' # # ','     '],
+  '%':['##   ','## # ','  #  ',' #   ',' # ##','   ##','     '],
+  '(':['  ## ',' #   ','#    ','#    ','#    ',' #   ','  ## '],
+  ')':['##   ','   # ','    #','    #','    #','   # ','##   '],
+  '*':['     ','# # #',' ### ','#####',' ### ','# # #','     '],
+  '+':['     ','  #  ','  #  ','#####','  #  ','  #  ','     '],
+  '-':['     ','     ','     ','#####','     ','     ','     '],
+  '.':['     ','     ','     ','     ','     ',' ##  ',' ##  '],
+  '/':['    #','   # ','   # ','  #  ',' #   ',' #   ','#    '],
+  ':':['     ',' ##  ',' ##  ','     ',' ##  ',' ##  ','     '],
+  '<':['   # ','  #  ',' #   ','#    ',' #   ','  #  ','   # '],
+  '=':['     ','     ','#####','     ','#####','     ','     '],
+  '>':['#    ',' #   ','  #  ','   # ','  #  ',' #   ','#    '],
+  '°':[' ##  ','#  # ',' ##  ','     ','     ','     ','     '],
+  '0':[' ### ','#   #','#  ##','# # #','##  #','#   #',' ### '],
+  '1':['  #  ',' ##  ','  #  ','  #  ','  #  ','  #  ','#####'],
+  '2':[' ### ','#   #','    #','  ## ',' #   ','#    ','#####'],
+  '3':['#####','    #','    #',' ####','    #','    #','#####'],
+  '4':['#   #','#   #','#   #','#####','    #','    #','    #'],
+  '5':['#####','#    ','#    ','#### ','    #','    #','#### '],
+  '6':[' ### ','#    ','#    ','#### ','#   #','#   #',' ### '],
+  '7':['#####','    #','   # ','  #  ',' #   ',' #   ',' #   '],
+  '8':[' ### ','#   #','#   #',' ### ','#   #','#   #',' ### '],
+  '9':[' ### ','#   #','#   #',' ####','    #','    #',' ### '],
+  'A':[' ### ','#   #','#   #','#####','#   #','#   #','#   #'],
+  'B':['#### ','#   #','#   #','#### ','#   #','#   #','#### '],
+  'C':[' ### ','#    ','#    ','#    ','#    ','#    ',' ### '],
+  'D':['#### ','#   #','#   #','#   #','#   #','#   #','#### '],
+  'E':['#####','#    ','#    ','#### ','#    ','#    ','#####'],
+  'F':['#####','#    ','#    ','#### ','#    ','#    ','#    '],
+  'G':[' ### ','#    ','#    ','#  ##','#   #','#   #',' ####'],
+  'H':['#   #','#   #','#   #','#####','#   #','#   #','#   #'],
+  'I':['###',' # ',' # ',' # ',' # ',' # ','###'],
+  'J':['  ###','    #','    #','    #','#   #','#   #',' ### '],
+  'K':['#   #','#  # ','# #  ','##   ','# #  ','#  # ','#   #'],
+  'L':['#    ','#    ','#    ','#    ','#    ','#    ','#####'],
+  'M':['#   #','## ##','# # #','#   #','#   #','#   #','#   #'],
+  'N':['#   #','##  #','# # #','#  ##','#   #','#   #','#   #'],
+  'O':[' ### ','#   #','#   #','#   #','#   #','#   #',' ### '],
+  'P':['#### ','#   #','#   #','#### ','#    ','#    ','#    '],
+  'Q':[' ### ','#   #','#   #','#   #','# # #','#  # ',' ## #'],
+  'R':['#### ','#   #','#   #','#### ','# #  ','#  # ','#   #'],
+  'S':[' ####','#    ','#    ',' ### ','    #','    #','#### '],
+  'T':['#####','  #  ','  #  ','  #  ','  #  ','  #  ','  #  '],
+  'U':['#   #','#   #','#   #','#   #','#   #','#   #',' ### '],
+  'V':['#   #','#   #','#   #','#   #',' # # ',' # # ','  #  '],
+  'W':['#   #','#   #','#   #','# # #','# # #','## ##','#   #'],
+  'X':['#   #',' # # ',' # # ','  #  ',' # # ',' # # ','#   #'],
+  'Y':['#   #','#   #',' # # ','  #  ','  #  ','  #  ','  #  '],
+  'Z':['#####','    #','   # ','  #  ',' #   ','#    ','#####'],
+};
+
+// Compile to column-major: glyph[col] = 7-bit bitmask (bit0 = top row)
+function compileFont(src) {
+  const out = {};
+  for (const [ch, rows] of Object.entries(src)) {
+    const w = rows[0].length;
+    const cols = [];
+    for (let c = 0; c < w; c++) {
+      let b = 0;
+      for (let r = 0; r < 7; r++) if (rows[r]?.[c] === '#') b |= (1 << r);
+      cols.push(b);
+    }
+    out[ch] = cols;
+  }
+  return out;
+}
+const FONT = compileFont(FONT_SRC);
+
+// ══════════════════════════════════════════════════════
+//  PIXEL BUFFER
+// ══════════════════════════════════════════════════════
+function makeBuf(cols, rows) {
+  const data = new Uint8Array(cols * rows);
+  return {
+    cols, rows, data,
+    clear()       { data.fill(0); },
+    set(c,r,v)    { if(c>=0&&c<cols&&r>=0&&r<rows) data[r*cols+c]=v; },
+    get(c,r)      { return (c>=0&&c<cols&&r>=0&&r<rows)?data[r*cols+c]:0; },
+    clone()       { const b=makeBuf(cols,rows); b.data.set(data); return b; },
+    copyFrom(b)   { data.set(b.data); },
+  };
+}
+
+function glyphW(ch) { return (FONT[ch.toUpperCase()]||FONT[' ']).length; }
+
+function textWidth(str) {
+  let w = 0;
+  for (const ch of str) w += glyphW(ch) + 1;
+  return Math.max(0, w - 1);
+}
+
+function drawChar(buf, ch, col, row) {
+  const g = FONT[ch.toUpperCase()] || FONT[' '];
+  for (let c = 0; c < g.length; c++) {
+    const colData = g[c];
+    for (let r = 0; r < 7; r++)
+      if (colData & (1<<r)) buf.set(col+c, row+r, 1);
+  }
+  return g.length + 1;
+}
+
+function drawText(buf, str, col, row) {
+  let x = col;
+  for (const ch of str) x += drawChar(buf, ch, x, row);
+}
+
+function drawCentered(buf, str, row) {
+  const tw = textWidth(str);
+  drawText(buf, str, Math.floor((buf.cols - tw) / 2), row);
+}
+
+function drawRight(buf, str, endCol, row) {
+  drawText(buf, str, endCol - textWidth(str), row);
+}
+
+// ══════════════════════════════════════════════════════
+//  TRANSITIONS
+// ══════════════════════════════════════════════════════
+const TRANS_TYPES = ['slide-left', 'wipe-right', 'curtain', 'rain', 'dissolve'];
+
+function applyTransition(display, from, to, type, p) {
+  const { cols, rows } = display;
+  // Ease in-out cubic
+  const e = p < 0.5 ? 4*p*p*p : 1-Math.pow(-2*p+2,3)/2;
+
+  switch(type) {
+    case 'slide-left': {
+      const off = Math.floor(e * cols);
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++) {
+          const src = c + off;
+          display.set(c, r, src < cols ? from.get(src,r) : to.get(src-cols,r));
+        }
+      break;
+    }
+    case 'wipe-right': {
+      const wc = Math.floor(e * cols);
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          display.set(c, r, c < wc ? to.get(c,r) : from.get(c,r));
+      break;
+    }
+    case 'curtain': {
+      if (p < 0.5) {
+        const rr = Math.floor(p*2 * rows);
+        for (let r = 0; r < rows; r++)
+          for (let c = 0; c < cols; c++)
+            display.set(c, r, r < rr ? 0 : from.get(c,r));
+      } else {
+        const rr = Math.floor((p-0.5)*2 * rows);
+        for (let r = 0; r < rows; r++)
+          for (let c = 0; c < cols; c++)
+            display.set(c, r, r < rr ? to.get(c,r) : 0);
+      }
+      break;
+    }
+    case 'rain': {
+      // Columns drop in left→right
+      for (let c = 0; c < cols; c++) {
+        const startAt = (c / cols) * 0.55;
+        const colP = Math.min(1, Math.max(0, (p - startAt) / 0.45));
+        const filled = Math.floor(colP * rows);
+        for (let r = 0; r < rows; r++)
+          display.set(c, r, r < filled ? to.get(c,r) : from.get(c,r));
+      }
+      break;
+    }
+    case 'dissolve': {
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++) {
+          const h = ((c*2749 ^ r*1361 ^ (c*r+c)*53) & 0x3FF) / 0x3FF;
+          display.set(c, r, h < e ? to.get(c,r) : from.get(c,r));
+        }
+      break;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  PANEL  — one physical unit
+// ══════════════════════════════════════════════════════
+class Panel {
+  constructor(canvas, cols, rows, scenes, startDelay=0) {
+    this.canvas  = canvas;
+    this.cols    = cols;
+    this.rows    = rows;
+    this.scenes  = scenes;
+    this.si      = 0;           // scene index
+    this.time    = -startDelay; // scene elapsed (negative = wait)
+    this.scrollX = 0;           // scroll offset (px)
+
+    this.display  = makeBuf(cols, rows);
+    this.fromBuf  = makeBuf(cols, rows);
+    this.toBuf    = makeBuf(cols, rows);
+
+    this.inTrans  = false;
+    this.transT   = 0;
+    this.transDur = 600;
+    this.transType= TRANS_TYPES[0];
+    this.transIdx = 0;
+
+    // Per-LED brightness variation + rare dead pixels
+    this.noise = Float32Array.from({length: cols*rows}, () =>
+      Math.random() < 0.004 ? 0 : 0.84 + Math.random() * 0.16);
+
+    this._setup();
+  }
+
+  _setup() {
+    const dpr  = Math.min(window.devicePixelRatio||1, 2);
+    const cssW = this.canvas.offsetWidth || 800;
+    this.pitch = Math.max(4, Math.floor(cssW / this.cols));
+    const cssH = this.pitch * this.rows;
+    this.canvas.style.height = cssH + 'px';
+    this.canvas.width  = Math.round(cssW * dpr);
+    this.canvas.height = Math.round(cssH * dpr);
+    this.ctx   = this.canvas.getContext('2d');
+    this.ctx.scale(dpr, dpr);
+    this.cssW  = cssW;
+    this.cssH  = cssH;
+    this.dotR  = this.pitch * 0.30;
+    this.glowR = this.pitch * 0.80;
+  }
+
+  get scene() { return this.scenes[this.si]; }
+
+  _render(scene, buf, t, sx) {
+    buf.clear();
+    const R = 0; // top row for 7-tall font in 8-row display
+    switch(scene.type) {
+      case 'clock': {
+        const d  = new Date();
+        const hh = String(d.getHours()).padStart(2,'0');
+        const mm = String(d.getMinutes()).padStart(2,'0');
+        // Blink colon on odd seconds
+        const sep = d.getSeconds()%2===0 ? ':' : ' ';
+        drawCentered(buf, `${hh}${sep}${mm}`, R);
+        break;
+      }
+      case 'static': {
+        if (scene.left && scene.right) {
+          drawText(buf, scene.left, 1, R);
+          drawRight(buf, scene.right, buf.cols-1, R);
+        } else {
+          drawCentered(buf, scene.left||scene.right||'', R);
+        }
+        break;
+      }
+      case 'scroll': {
+        // Text scrolls R→L; sx=0 means text just entering from right
+        const startCol = this.cols - Math.floor(sx);
+        drawText(buf, scene.text, startCol, R);
+        break;
+      }
+      case 'blink': {
+        const which = Math.floor(t / (scene.interval||500)) % 2;
+        drawCentered(buf, which===0 ? scene.a : scene.b, R);
+        break;
+      }
+    }
+  }
+
+  _triggerNext() {
+    this.fromBuf.copyFrom(this.display);
+    this.si       = (this.si + 1) % this.scenes.length;
+    this.time     = 0;
+    this.scrollX  = 0;
+    // Pick next transition
+    this.transIdx = (this.transIdx + 1) % TRANS_TYPES.length;
+    this.transType= TRANS_TYPES[this.transIdx];
+    this.transT   = 0;
+    this.transDur = this.scene.type==='scroll' ? 350 : 620;
+    this.inTrans  = true;
+    // Pre-render target (scroll scenes show blank — text enters from right naturally)
+    this._render(this.scene, this.toBuf, 0, 0);
+  }
+
+  update(dt) {
+    if (this.time < 0) {
+      // Startup delay — show blank
+      this.time += dt;
+      this.display.clear();
+      this._draw();
+      return;
+    }
+
+    if (this.inTrans) {
+      this.transT += dt;
+      const p = Math.min(1, this.transT / this.transDur);
+      if (p >= 1) {
+        this.display.copyFrom(this.toBuf);
+        this.inTrans = false;
+      } else {
+        applyTransition(this.display, this.fromBuf, this.toBuf, this.transType, p);
+      }
+    } else {
+      const sc = this.scene;
+      if (sc.type === 'scroll') {
+        this.scrollX += (sc.speed||34) * dt / 1000;
+        const tw = textWidth(sc.text);
+        if (this.scrollX > this.cols + tw + 4) this._triggerNext();
+        else this._render(sc, this.display, this.time, this.scrollX);
+      } else if (sc.type === 'clock') {
+        this.time += dt;
+        this._render(sc, this.display, this.time, 0);
+        if (this.time >= sc.duration) this._triggerNext();
+      } else {
+        this.time += dt;
+        this._render(sc, this.display, this.time, 0);
+        if (this.time >= sc.duration) this._triggerNext();
+      }
+    }
+
+    this._draw();
+  }
+
+  _draw() {
+    const { ctx, pitch, dotR, glowR, cols, rows, noise } = this;
+    const W = cols * pitch, H = rows * pitch;
+
+    // ── Background ──
+    ctx.fillStyle = '#030201';
+    ctx.fillRect(0, 0, W, H);
+
+    // ── Unlit dim dots ──
+    ctx.fillStyle = 'rgba(50,22,3,0.52)';
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!this.display.get(c, r)) {
+          const x = (c+0.5)*pitch, y = (r+0.5)*pitch;
+          ctx.beginPath();
+          ctx.arc(x, y, dotR*0.52, 0, Math.PI*2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // ── Glow layer (shadow trick — per-LED) ──
+    ctx.save();
+    ctx.shadowBlur  = glowR * 1.9;
+    ctx.shadowColor = 'rgba(255,100,5,0.92)';
+    ctx.fillStyle   = '#FF6A08';
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (this.display.get(c, r)) {
+          const n = noise[r*cols+c];
+          if (n === 0) continue; // dead pixel — no glow
+          const x = (c+0.5)*pitch, y = (r+0.5)*pitch;
+          ctx.globalAlpha = n;
+          ctx.beginPath();
+          ctx.arc(x, y, dotR, 0, Math.PI*2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+
+    // ── Bright core ──
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const n = noise[r*cols+c];
+        if (this.display.get(c, r) && n > 0) {
+          const x = (c+0.5)*pitch, y = (r+0.5)*pitch;
+          const grd = ctx.createRadialGradient(x-dotR*.2, y-dotR*.2, 0, x, y, dotR);
+          grd.addColorStop(0, `rgba(255,240,200,${n})`);
+          grd.addColorStop(1, `rgba(255,148,12,${0.7*n})`);
+          ctx.fillStyle = grd;
+          ctx.beginPath();
+          ctx.arc(x, y, dotR, 0, Math.PI*2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // ── Module dividers (every 8 cols, like chained 8×8 MAX7219s) ──
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+    ctx.lineWidth   = 0.8;
+    for (let m = 8; m < cols; m += 8) {
+      ctx.beginPath();
+      ctx.moveTo(m*pitch, 0);
+      ctx.lineTo(m*pitch, H);
+      ctx.stroke();
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  DATA
+// ══════════════════════════════════════════════════════
+const WEATHER = {
+  tempC: -8, windKph: 34, windDir: 'NW',
+  baseCm: 112, summitCm: 198, new24h: 7, vis: 'GOOD',
+};
+
+const LIFTS = [
+  { name:'GONDOLA',  st:'open',   wait:4,  op:'08:30-16:30' },
+  { name:'CHAIR-6',  st:'open',   wait:12, op:'09:00-16:00' },
+  { name:'T-BAR',    st:'hold',   wait:0,  op:'09:30-15:30' },
+  { name:'CARPET',   st:'open',   wait:0,  op:'09:00-16:00' },
+  { name:'N-QUAD',   st:'closed', wait:0,  op:'--:--/--:--' },
+];
+
+function statusLabel(st) { return {open:'OPEN',closed:'CLSD',hold:'HOLD'}[st]||st; }
+function waitLabel(l) {
+  if (l.st!=='open') return '----';
+  return l.wait===0 ? '<1 MIN' : `${l.wait} MIN`;
+}
+
+function liftScenes(l) {
+  // 32 cols fits ~5 chars. Show bite-sized frames + long scroll.
+  const statusStr = statusLabel(l.st);
+  const waitStr   = l.st==='open' ? (l.wait===0 ? '<1M' : `${l.wait}M`) : '---';
+
+  const ticker =
+    `*** ${l.name} ***  ` +
+    `STATUS: ${statusStr}  ` +
+    (l.st==='open' ? `WAIT: ${waitStr}  ` : '') +
+    `OPS: ${l.op}  ` +
+    (l.st==='open'   ? `HELMETS ABOVE TREELINE  HAVE A GREAT RUN  ` :
+     l.st==='hold'   ? `WIND HOLD  MONITORING CONDITIONS  CHECK BACK SOON  ` :
+                       `CLOSED TODAY  USE ALTERNATE ROUTE  `) +
+    `TEMP: ${WEATHER.tempC}C  WIND: ${WEATHER.windKph}KPH ${WEATHER.windDir}  *** `;
+
+  return [
+    // Blink lift name (abbreviated to fit)
+    { type:'blink',  a: l.name.slice(0,5), b:'     ', interval:600, duration:2400 },
+    // Status centred
+    { type:'static', left: statusStr, duration: 2000 },
+    // Wait time
+    { type:'static', left:'WAIT', duration:1000 },
+    { type:'static', left: waitStr,  duration:1800 },
+    // Full scroll
+    { type:'scroll', text: ticker + '     ', speed: 36 },
+  ];
+}
+
+function weatherScenes() {
+  const W = WEATHER;
+  const ticker =
+    `*** SNOWPEAK MTN ***  ` +
+    `TEMP: ${W.tempC>0?'+':''}${W.tempC}C  ` +
+    `WIND: ${W.windKph}KPH ${W.windDir}  ` +
+    `BASE: ${W.baseCm}CM  ` +
+    `SUMMIT: ${W.summitCm}CM  ` +
+    `NEW SNOW: +${W.new24h}CM  ` +
+    `VIS: ${W.vis}  ` +
+    `SKI SAFE  HAVE FUN  *** `;
+
+  return [
+    { type:'clock',  duration:5000 },
+    { type:'static', left:`${W.tempC>0?'+':''}${W.tempC}C`,        duration:2000 },
+    { type:'static', left:`${W.windKph}K`,                          duration:2000 },
+    { type:'static', left:`${W.baseCm}`,                            duration:2000 },
+    { type:'scroll', text: ticker + '     ', speed: 36 },
+  ];
+}
+
+// ══════════════════════════════════════════════════════
+//  BUILD DOM + PANELS
+// ══════════════════════════════════════════════════════
+const COLS = 32, ROWS = 8;
+const stack  = document.getElementById('stack');
+const panels = [];
+
+function makeUnit(label) {
+  const div = document.createElement('div');
+  div.className = 'housing';
+  div.innerHTML = `
+    <div class="s tl"></div><div class="s tr"></div>
+    <div class="s bl"></div><div class="s br"></div>
+    <canvas></canvas>
+    <div class="unit-label">${label}</div>
+  `;
+  stack.appendChild(div);
+  return div.querySelector('canvas');
+}
+
+// Init after layout
+setTimeout(() => {
+  // Weather/clock unit
+  const wc = makeUnit('MOUNTAIN CONDITIONS · UNIT 00');
+  panels.push(new Panel(wc, COLS, ROWS, weatherScenes(), 0));
+
+  // Lift units (staggered start so they're not all in sync)
+  LIFTS.forEach((l, i) => {
+    const cv = makeUnit(`${l.name} · UNIT 0${i+1}`);
+    panels.push(new Panel(cv, COLS, ROWS, liftScenes(l), i * 1600 + 600));
+  });
+
+  // Animation loop
+  let last = null;
+  function loop(ts) {
+    if (!last) last = ts;
+    const dt = Math.min(ts - last, 80);
+    last = ts;
+    panels.forEach(p => p.update(dt));
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}, 80);
+
+// ══════════════════════════════════════════════════════
+//  HOME ASSISTANT HOOK (uncomment & configure)
+// ══════════════════════════════════════════════════════
+/*
+const HA = { url: 'http://homeassistant.local:8123', token: 'YOUR_TOKEN_HERE' };
+
+async function haState(entity) {
+  const r = await fetch(`${HA.url}/api/states/${entity}`,
+    { headers: { Authorization: `Bearer ${HA.token}` } });
+  return (await r.json()).state;
+}
+
+async function syncHA() {
+  WEATHER.tempC    = parseFloat(await haState('sensor.mountain_temp'));
+  WEATHER.windKph  = parseFloat(await haState('sensor.mountain_wind_speed'));
+  WEATHER.windDir  = await haState('sensor.mountain_wind_dir');
+  WEATHER.baseCm   = parseFloat(await haState('sensor.snow_depth_base'));
+  LIFTS[0].st      = await haState('binary_sensor.gondola_running') === 'on' ? 'open' : 'closed';
+  LIFTS[0].wait    = parseInt(await haState('sensor.gondola_wait_time')) || 0;
+  // Rebuild scenes after updating data
+  panels[1].scenes = liftScenes(LIFTS[0]);
+  // ... etc
+}
+setInterval(syncHA, 30000);
+syncHA();
+*/
+</script>
+</body>
+</html>
