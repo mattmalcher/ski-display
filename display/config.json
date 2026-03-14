@@ -24,7 +24,7 @@
     },
     {
       "name": "stock",
-      "enabled": false,
+      "enabled": true,
       "symbols": ["AAPL", "TSLA"],
       "fetch_interval": 300
     },
