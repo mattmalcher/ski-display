@@ -101,18 +101,17 @@ For modules that fetch data over the network, run the fetch in a daemon thread a
 
 ```bash
 # From this repo on your dev machine:
-scp -r display/ install.sh matt@<pi-ip>:~/
+scp -r display/ install.sh pyproject.toml uv.lock matt@<pi-ip>:~/
 ssh matt@<pi-ip> bash install.sh
 ```
 
 The script:
 1. Enables SPI (`raspi-config nonint do_spi 0`)
-2. Installs Python packages into a venv at `/home/matt/display/.venv`
-3. Creates two systemd services (`display` and `display-web`), enabled on boot
+2. Installs [uv](https://docs.astral.sh/uv/) if not already present
+3. Syncs the Python environment from `uv.lock` into `/home/matt/display/.venv`
+4. Creates two systemd services (`display` and `display-web`), enabled on boot
 
-> **Note:** On Pi OS Trixie + Python 3.13, `luma.core` needs `RPi.GPIO`.
-> The install script handles this by creating the venv with `--system-site-packages`
-> (to access the system `python3-lgpio`) and installing `rpi-lgpio` via pip.
+Dependencies are declared in `pyproject.toml` and pinned in `uv.lock`. To add a dependency: `uv add <package>`, then redeploy.
 
 ## Usage
 

@@ -36,6 +36,9 @@ if [ "$SRC" != "$DEST" ]; then
     cp -r "$SRC/modules/" "$DEST/"
 fi
 
+cp "$HERE/pyproject.toml" "$DEST/"
+cp "$HERE/uv.lock"        "$DEST/"
+
 # config.json: only copy on first install to preserve user customisations
 if [ ! -f "$DEST/config.json" ]; then
     cp "$SRC/config.json" "$DEST/"
@@ -49,12 +52,19 @@ EDIT VIA WEB UI
 MSG
 fi
 
+# ── uv ───────────────────────────────────────────────────────────────────────
+echo "Installing uv..."
+if [ ! -x "$HOME/.local/bin/uv" ]; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+export PATH="$HOME/.local/bin:$PATH"
+
 # ── Python venv ───────────────────────────────────────────────────────────────
-echo "Creating venv and installing packages..."
-# --system-site-packages makes the system python3-lgpio available in the venv
-python3 -m venv --system-site-packages "$DEST/.venv"
-"$DEST/.venv/bin/pip" install --quiet --upgrade pip
-"$DEST/.venv/bin/pip" install --quiet luma.led_matrix flask rpi-lgpio
+echo "Syncing Python environment..."
+# --system-site-packages exposes the pre-installed python3-lgpio (Pi OS) to the venv.
+# --no-install-package lgpio prevents uv from trying to build lgpio from source.
+uv venv --system-site-packages --clear --python python3 "$DEST/.venv"
+uv sync --frozen --project "$DEST" --no-install-package lgpio
 
 # ── systemd: display ─────────────────────────────────────────────────────────
 sudo tee /etc/systemd/system/display.service > /dev/null << EOF

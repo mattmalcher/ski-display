@@ -1,0 +1,10 @@
+[project]
+name = "ski-display"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "luma.led_matrix",
+    "flask",
+    "rpi-lgpio",
+    "yfinance",
+]
