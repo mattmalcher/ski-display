@@ -11,12 +11,7 @@
       "enabled": true,
       "duration": 5.0
     },
-    {
-      "name": "messages",
-      "enabled": false,
-      "messages": []
-    },
-    {
+{
       "name": "textfile",
       "enabled": true,
       "file": "messages.txt",

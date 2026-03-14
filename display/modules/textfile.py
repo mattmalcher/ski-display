@@ -1,7 +1,6 @@
 """Text file module — reads scenes from messages.txt.
 
-Supports the same format as the messages module, plus optional
-icon/animation prefix tags:
+Supports icon/animation prefix tags:
 
     Normal message                  → static or scroll depending on length
     [ICON:thermometer] -3C          → static/scroll with icon prefix
@@ -11,13 +10,61 @@ The file is watched for changes every `reload_interval` seconds (default 2).
 """
 
 import os
+import re
 import time
 import logging
 
 from modules.base import DisplayModule
-from modules.messages import parse_message, _get_display_constants
 
 logger = logging.getLogger(__name__)
+
+_TAG = re.compile(r'^\[(ICON|ANIM):([^:\]]+)(?::(\d+))?\]\s*', re.IGNORECASE)
+
+_DEFAULT_SCROLL_SPEED = 36
+_DEFAULT_COLS = 32
+
+
+def _get_display_constants() -> tuple[int, int]:
+    """Return (cols, scroll_speed) from the running display module if available."""
+    try:
+        import display as _d
+        return _d.COLS, _d.SCROLL_SPEED
+    except Exception:
+        return _DEFAULT_COLS, _DEFAULT_SCROLL_SPEED
+
+
+def _parse_message(line: str, cols: int = _DEFAULT_COLS, scroll_speed: int = _DEFAULT_SCROLL_SPEED) -> dict | None:
+    """Parse one message string into a scene dict.
+
+    Returns None if the line is empty or tag-only (nothing to display).
+    """
+    extra: dict = {}
+
+    m = _TAG.match(line)
+    if m:
+        tag_kind = m.group(1).upper()
+        tag_name = m.group(2)
+        tag_fps  = m.group(3)
+        if tag_kind == 'ICON':
+            extra['icon'] = tag_name
+        else:  # ANIM
+            extra['animation'] = tag_name
+            extra['anim_fps'] = int(tag_fps) if tag_fps else 4
+        line = line[m.end():]
+
+    if not line:
+        return None
+
+    try:
+        from display import text_width
+        w = text_width(line)
+    except Exception:
+        w = len(line) * 6  # rough fallback
+
+    if w <= cols:
+        return {'type': 'static', 'text': line, 'duration': 3.0, **extra}
+    else:
+        return {'type': 'scroll', 'text': line + '     ', 'speed': scroll_speed, **extra}
 
 
 class Module(DisplayModule):
@@ -66,7 +113,7 @@ class Module(DisplayModule):
             line = raw.strip()
             if not line:
                 continue
-            scene = parse_message(line, cols, scroll_speed)
+            scene = _parse_message(line, cols, scroll_speed)
             if scene:
                 scenes.append(scene)
 
