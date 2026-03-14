@@ -230,6 +230,13 @@ def render(buf, scene, elapsed, scroll_x=0.0):
         text_col = _draw_prefix(buf, scene, elapsed)
         x = (text_col if text_col else COLS) - int(scroll_x)
         draw_text(buf, scene['text'], x)
+        if text_col:
+            # Mask the prefix zone: zero out any text pixels that scrolled into it,
+            # then redraw the icon/animation cleanly on top.
+            for c in range(text_col):
+                for r in range(ROWS):
+                    buf.set(c, r, 0)
+            _draw_prefix(buf, scene, elapsed)
 
 
 # ── Display push ───────────────────────────────────────────────────────────────
