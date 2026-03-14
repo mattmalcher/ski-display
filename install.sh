@@ -61,11 +61,11 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # ── Python venv ───────────────────────────────────────────────────────────────
 echo "Syncing Python environment..."
-# python3-lgpio provides the lgpio C library that rpi-lgpio wraps
-sudo apt-get install -y --no-install-recommends python3-lgpio
+# lgpio and its build dep swig are required by rpi-lgpio
+sudo apt-get install -y --no-install-recommends python3-lgpio swig
 # Pre-create venv with --system-site-packages so lgpio is visible without building
-uv venv --system-site-packages --python python3 "$DEST/.venv"
-uv sync --frozen --project "$DEST"
+uv venv --system-site-packages --clear --python python3 "$DEST/.venv"
+uv sync --frozen --project "$DEST" 
 
 # ── systemd: display ─────────────────────────────────────────────────────────
 sudo tee /etc/systemd/system/display.service > /dev/null << EOF
