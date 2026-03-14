@@ -25,9 +25,20 @@ echo "Installing files to $DEST..."
 mkdir -p "$DEST"
 SRC="$HERE/display"
 if [ "$SRC" != "$DEST" ]; then
-    cp "$SRC/font.py"    "$DEST/"
-    cp "$SRC/display.py" "$DEST/"
-    cp "$SRC/web.py"     "$DEST/"
+    cp "$SRC/font.py"        "$DEST/"
+    cp "$SRC/display.py"     "$DEST/"
+    cp "$SRC/web.py"         "$DEST/"
+    cp "$SRC/transitions.py" "$DEST/"
+    cp "$SRC/scheduler.py"   "$DEST/"
+    cp "$SRC/icons.py"       "$DEST/"
+    cp "$SRC/animations.py"  "$DEST/"
+    # Copy modules directory (always overwrite module code)
+    cp -r "$SRC/modules/" "$DEST/"
+fi
+
+# config.json: only copy on first install to preserve user customisations
+if [ ! -f "$DEST/config.json" ]; then
+    cp "$SRC/config.json" "$DEST/"
 fi
 
 if [ ! -f "$DEST/messages.txt" ]; then
