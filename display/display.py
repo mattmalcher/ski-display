@@ -7,6 +7,7 @@ Transitions are pluggable (see transitions.py).
 Modules provide scenes independently (see modules/).
 """
 
+from typing import Literal
 import json
 import logging
 import os
@@ -209,8 +210,13 @@ def render(buf, scene, elapsed, scroll_x=0.0):
     kind = scene['type']
 
     if kind == 'clock':
-        now = datetime.datetime.now()
-        sep = ':' if now.second % 2 == 0 else ' '
+        # Clock rendering lives here rather than in modules/clock.py because it
+        # must re-read the time on every frame (for the blinking colon), which
+        # is the render loop's job. The clock module's only role is to inject
+        # the scene into the scheduler so it can be enabled, disabled, and
+        # prioritised like any other module.
+        now: datetime = datetime.datetime.now()
+        sep: Literal[' ', ':'] = ':' if now.second % 2 == 0 else ' '
         draw_centered(buf, now.strftime('%H') + sep + now.strftime('%M'))
 
     elif kind == 'static':

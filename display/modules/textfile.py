@@ -1,9 +1,8 @@
 """Text file module — reads scenes from messages.txt.
 
-Supports the same format as the original display.py, plus optional
+Supports the same format as the messages module, plus optional
 icon/animation prefix tags:
 
-    CLOCK                           → live clock scene
     Normal message                  → static or scroll depending on length
     [ICON:thermometer] -3C          → static/scroll with icon prefix
     [ANIM:print_head:4] Print 67%   → static/scroll with animation prefix
@@ -12,19 +11,13 @@ The file is watched for changes every `reload_interval` seconds (default 2).
 """
 
 import os
-import re
 import time
 import logging
 
 from modules.base import DisplayModule
+from modules.messages import parse_message, _get_display_constants
 
 logger = logging.getLogger(__name__)
-
-_TAG = re.compile(r'^\[(ICON|ANIM):([^:\]]+)(?::(\d+))?\]\s*', re.IGNORECASE)
-
-# Keep in sync with display.py constants (imported at runtime to avoid circular dep)
-_DEFAULT_SCROLL_SPEED = 36
-_DEFAULT_COLS = 32
 
 
 class Module(DisplayModule):
@@ -66,58 +59,15 @@ class Module(DisplayModule):
             logger.warning('textfile: cannot read %s', self._file)
             return [{'type': 'static', 'text': 'NO MSG', 'duration': 3.0}]
 
-        # Import here to pick up runtime values set by display.py
-        try:
-            import display as _d
-            cols = _d.COLS
-            scroll_speed = _d.SCROLL_SPEED
-        except Exception:
-            cols = _DEFAULT_COLS
-            scroll_speed = _DEFAULT_SCROLL_SPEED
+        cols, scroll_speed = _get_display_constants()
 
         scenes = []
         for raw in lines:
             line = raw.strip()
             if not line:
                 continue
-            scene = self._parse_line(line, cols, scroll_speed)
+            scene = parse_message(line, cols, scroll_speed)
             if scene:
                 scenes.append(scene)
 
         return scenes or [{'type': 'static', 'text': 'EMPTY', 'duration': 3.0}]
-
-    def _parse_line(self, line: str, cols: int, scroll_speed: int) -> dict | None:
-        """Parse one line into a scene dict, honoring [ICON:] / [ANIM:] tags."""
-        extra: dict = {}
-
-        # Strip optional tag prefix
-        m = _TAG.match(line)
-        if m:
-            tag_kind = m.group(1).upper()
-            tag_name = m.group(2)
-            tag_fps  = m.group(3)
-            if tag_kind == 'ICON':
-                extra['icon'] = tag_name
-            else:  # ANIM
-                extra['animation'] = tag_name
-                extra['anim_fps'] = int(tag_fps) if tag_fps else 4
-            line = line[m.end():]
-
-        if not line:
-            # Tag with no text — skip
-            return None
-
-        if line.upper() == 'CLOCK':
-            return {'type': 'clock', 'duration': 5.0, **extra}
-
-        # Determine width — import text_width lazily
-        try:
-            from display import text_width
-            w = text_width(line)
-        except Exception:
-            w = len(line) * 6  # rough fallback
-
-        if w <= cols:
-            return {'type': 'static', 'text': line, 'duration': 3.0, **extra}
-        else:
-            return {'type': 'scroll', 'text': line + '     ', 'speed': scroll_speed, **extra}
