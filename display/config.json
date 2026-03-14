@@ -1,0 +1,34 @@
+{
+  "display": {
+    "scroll_speed": 36,
+    "frame_time": 0.016,
+    "contrast": 3,
+    "scheduler_refresh_interval": 5.0
+  },
+  "modules": [
+    {
+      "name": "textfile",
+      "enabled": true,
+      "file": "messages.txt",
+      "reload_interval": 2.0
+    },
+    {
+      "name": "weather",
+      "enabled": false,
+      "fetch_interval": 600
+    },
+    {
+      "name": "stock",
+      "enabled": false,
+      "symbols": ["AAPL", "TSLA"],
+      "fetch_interval": 300
+    },
+    {
+      "name": "print_status",
+      "enabled": false,
+      "octoprint_url": "http://octopi.local",
+      "api_key": "",
+      "fetch_interval": 30
+    }
+  ]
+}
