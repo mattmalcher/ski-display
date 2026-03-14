@@ -1,13 +1,15 @@
-"""Multi-frame animations for the LED matrix display.
+"""Animations and icons for the LED matrix display.
 
-Format: each animation is a list of frames.
-Each frame is a list of column bitmasks — identical to the icon format in icons.py.
-A 1-frame animation is equivalent to a static icon.
+Format: each entry is a list of frames.
+Each frame is a list of column bitmasks — column-major, bit 0 = top row.
+A 1-frame entry is a static icon; multi-frame entries animate over time.
 
 Scene dict usage:
     {'type': 'scroll', 'text': 'Print 67%', 'animation': 'print_head', 'anim_fps': 4}
+    {'type': 'static', 'text': '-3C', 'icon': 'thermometer'}
 
 The frame is selected by: frame_idx = int(elapsed * anim_fps) % len(frames)
+For 1-frame entries (icons) the frame index is always 0.
 """
 
 # Row-string source for each frame, compiled to column bitmasks at import time.
@@ -143,6 +145,107 @@ _SRC = {
             '.....',
         ],
     ],
+
+    # ── Static icons (1-frame) ─────────────────────────────────────────────────
+
+    'thermometer': [[
+        '..#..',
+        '..#..',
+        '..#..',
+        '.###.',
+        '#...#',
+        '#...#',
+        '.###.',
+        '.....',
+    ]],
+
+    'battery_ok': [[
+        '.#####.',
+        '#.....#',
+        '#.###.#',
+        '#.###.#',
+        '#.###.#',
+        '#.....#',
+        '.#####.',
+        '.......',
+    ]],
+
+    'battery_low': [[
+        '.#####.',
+        '#.....#',
+        '#.#...#',
+        '#.#...#',
+        '#.#...#',
+        '#.....#',
+        '.#####.',
+        '.......',
+    ]],
+
+    'wifi': [[
+        '#####',
+        '#...#',
+        '.###.',
+        '.#.#.',
+        '..#..',
+        '.....',
+        '..#..',
+        '.....',
+    ]],
+
+    'snowflake': [[
+        '#.#.#',
+        '.###.',
+        '#####',
+        '.###.',
+        '#.#.#',
+        '.....',
+        '.....',
+        '.....',
+    ]],
+
+    'arrow_up': [[
+        '..#..',
+        '.###.',
+        '#####',
+        '..#..',
+        '..#..',
+        '..#..',
+        '..#..',
+        '.....',
+    ]],
+
+    'arrow_down': [[
+        '..#..',
+        '..#..',
+        '..#..',
+        '..#..',
+        '#####',
+        '.###.',
+        '..#..',
+        '.....',
+    ]],
+
+    'clock': [[
+        '.###.',
+        '#...#',
+        '#.#.#',
+        '#.##.',
+        '#...#',
+        '.###.',
+        '.....',
+        '.....',
+    ]],
+
+    'ski': [[
+        '.....',
+        '..#..',
+        '.###.',
+        '..#..',
+        '..#..',
+        '..###',
+        '.....',
+        '.....',
+    ]],
 }
 
 
