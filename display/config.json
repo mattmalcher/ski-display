@@ -22,7 +22,8 @@
     },
     {
       "name": "weather",
-      "enabled": false,
+      "enabled": true,
+      "location": "Aviemore",
       "fetch_interval": 600
     },
     {
