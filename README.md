@@ -29,20 +29,26 @@ Chain: `Pi → Module 1 DOUT → Module 2 DIN → Module 3 DIN → Module 4 DIN`
 
 ```
 display/
-├── display.py        Main display loop — rendering, transitions, hardware push
-├── scheduler.py      Collects scenes from all modules; handles TTL and priority
-├── transitions.py    Pluggable transition registry (5 built-in + custom support)
-├── icons.py          Static icon bitmaps (column-major, same format as font.py)
-├── animations.py     Multi-frame animations (same format, list of frames)
-├── font.py           5×7 bitmap font, column-major bitmasks for MAX7219
-├── web.py            Flask web UI for editing messages
-├── config.json       Module enable/disable and per-module settings
+├── display.py           Main display loop — rendering, transitions, hardware push
+├── scheduler.py         Collects scenes from all modules; handles TTL and priority
+├── transitions.py       Pluggable transition registry (5 built-in + custom support)
+├── icons.py             Static icon bitmaps (column-major, same format as font.py)
+├── animations.py        Multi-frame animations (same format, list of frames)
+├── font.py              5×7 bitmap font, column-major bitmasks for MAX7219
+├── web.py               Flask web UI for editing messages
+├── config.json          Module enable/disable and per-module settings
 └── modules/
-    ├── base.py       DisplayModule base class
-    ├── textfile.py   Reads messages.txt; built-in, always active
-    └── …             Add new modules here (weather, stock, print status, …)
-install.sh            One-shot deploy script
-led-matrix-display.html   Browser pixel-accurate emulator (reference/preview)
+    ├── base.py           DisplayModule base class
+    ├── clock.py          Live HH:MM clock with blinking colon
+    ├── textfile.py       Reads messages.txt; watches for live edits
+    ├── weather.py        Current conditions via Open-Meteo (no API key needed)
+    ├── stock.py          Stock ticker prices via yfinance
+    ├── notable_dates.py  Date-based messages and countdown reminders
+    ├── home_assistant.py Home Assistant sensor states via REST API
+    ├── ics.py            Upcoming events from any iCal/ICS feed URL
+    └── claude_usage.py   Claude.ai subscription message limit utilisation
+install.sh               One-shot deploy script
+led-matrix-display.html  Browser pixel-accurate emulator (reference/preview)
 ```
 
 ### Scene types
@@ -51,7 +57,6 @@ Messages are driven by `/home/matt/display/messages.txt` — one line per entry.
 
 | Line content | Result |
 |---|---|
-| `CLOCK` | Live HH:MM clock, colon blinks on odd seconds |
 | Short text (fits ≤32px wide) | Centred static frame, 3 seconds |
 | Long text | Scrolls right-to-left at 36 px/sec |
 | `[ICON:name] text` | Prefixes text with a static icon (see `icons.py` for names) |
@@ -99,6 +104,96 @@ Each data source is an independent module in `display/modules/`. Modules run ind
 
 For modules that fetch data over the network, run the fetch in a daemon thread and cache results — `get_scenes()` should only read the cache so it never blocks the render loop.
 
+### Available modules
+
+#### `clock` — live clock
+```json
+{"name": "clock", "enabled": true, "duration": 5.0}
+```
+Displays a live HH:MM clock with a blinking colon. `duration` controls how long it stays on screen before rotating to the next scene.
+
+---
+
+#### `textfile` — messages file
+```json
+{"name": "textfile", "enabled": true, "file": "messages.txt", "reload_interval": 2.0}
+```
+Reads scenes from `messages.txt` (one line per entry). Watches for changes every `reload_interval` seconds and reloads live. See [Scene types](#scene-types) for supported line formats.
+
+---
+
+#### `weather` — current conditions
+```json
+{"name": "weather", "enabled": true, "location": "Aviemore", "fetch_interval": 600}
+```
+Fetches current temperature, conditions, and wind speed via [Open-Meteo](https://open-meteo.com/) — free, no API key required. Location is resolved by name using the Open-Meteo Geocoding API. No extra dependencies.
+
+---
+
+#### `stock` — stock ticker
+```json
+{"name": "stock", "enabled": true, "symbols": ["AAPL", "TSLA"], "fetch_interval": 300}
+```
+Shows price and daily change percentage for each symbol. Requires `yfinance` (`uv add yfinance`). Animated with `stock_up` / `stock_down` arrow animations.
+
+---
+
+#### `notable_dates` — date messages and countdowns
+```json
+{
+    "name": "notable_dates",
+    "enabled": true,
+    "dates": [
+        {"date": "2026-12-25", "message": "Merry Christmas!", "repeat": "annual", "reminder_days": [7, 3, 1]},
+        {"date": "2026-06-15", "message": "Summer hols begin", "repeat": "none", "reminder_days": [14, 7]},
+        {"date": "2026-03-19", "message": "Recycling bins", "repeat": "weekly", "interval_weeks": 2, "reminder_days": [1]}
+    ]
+}
+```
+
+Shows a message on the specified date, and countdown reminders on the days listed in `reminder_days`. Repeat modes:
+
+| `repeat` | Behaviour |
+|---|---|
+| `"none"` | One-off; silently ignored once the date has passed |
+| `"annual"` | Same month/day every year; year in the date field is ignored |
+| `"weekly"` | Every N weeks anchored to the given date; use `interval_weeks` (default 1) |
+
+---
+
+#### `home_assistant` — sensor states
+```json
+{
+    "name": "home_assistant",
+    "enabled": true,
+    "ha_url": "http://homeassistant.local:8123",
+    "token": "your-long-lived-access-token",
+    "entity_ids": ["sensor.living_room_temperature", "sensor.outdoor_humidity"],
+    "fetch_interval": 60,
+    "ttl": 120
+}
+```
+Fetches entity states from the Home Assistant REST API. The `token` is a long-lived access token from your HA profile page. Short readings display as static; long text scrolls automatically. No extra dependencies.
+
+---
+
+#### `ics` — iCal / calendar events
+```json
+{
+    "name": "ics",
+    "enabled": true,
+    "ical_url": "https://...",
+    "days_ahead": 7,
+    "fetch_interval": 900
+}
+```
+Shows upcoming events from any iCal feed URL. Handles recurring events. Events today are shown at `priority: 2` (appear more frequently); future events show day/time until the event. Requires `icalendar` and `recurring-ical-events` (`uv add icalendar recurring-ical-events`).
+
+ICS feed URLs by provider:
+- **Google Calendar:** Settings → (select calendar) → Integrate calendar → "Secret address in iCal format"
+- **Outlook / Hotmail:** Settings → View all Outlook settings → Calendar → Shared calendars → Publish a calendar → copy the ICS link
+- **Apple iCloud:** Calendar app → right-click calendar → Share Calendar → Public Calendar → copy the link (change `webcal://` to `https://`)
+
 ## Deploy
 
 ```bash
@@ -133,17 +228,9 @@ sudo systemctl status display-web
 journalctl -u display -f
 ```
 
-## Claude.ai usage module
+---
 
-The `claude_usage` module displays your subscription's message limit utilisation and reset times:
-
-```
-Claude 5h 31% resets 15:00
-Claude 7d 16% resets 21 Mar
-```
-
-It polls the 5-hour and 7-day rolling windows every 2 minutes. Enable it in `config.json`:
-
+#### `claude_usage` — Claude.ai subscription usage
 ```json
 {
   "name": "claude_usage",
@@ -153,22 +240,8 @@ It polls the 5-hour and 7-day rolling windows every 2 minutes. Enable it in `con
   "fetch_interval": 120
 }
 ```
+Shows message limit utilisation and reset times for the 5-hour and 7-day rolling windows, e.g. `Claude 5h 31% resets 15:00`. Polls every `fetch_interval` seconds (default 120). No extra dependencies.
 
-**Finding your `session_key`:**
+**Finding your `session_key`:** Log in to claude.ai → DevTools (F12) → Application → Cookies → `https://claude.ai` → copy the `sessionKey` value (starts with `sk-ant-sid01-`). The cookie expires roughly every 30 days; when it does the module silently produces no scenes and logs `session expired — update session_key in config`.
 
-1. Log in to [claude.ai](https://claude.ai) in your browser
-2. Open DevTools (F12) → **Application** → **Cookies** → `https://claude.ai`
-3. Copy the value of the `sessionKey` cookie (starts with `sk-ant-sid01-`)
-
-The cookie expires roughly every 30 days. When it does the display silently stops showing Claude scenes and logs `session expired — update session_key in config`. Refresh it by repeating the steps above and updating `config.json`.
-
-**Finding your `org_id`:**
-
-Visit `claude.ai/settings/usage`, open DevTools → **Network**, and look for the request to `/api/organizations/<org_id>/usage` — the UUID in that URL is your org ID.
-
-## Home Assistant integration
-
-Create `display/modules/homeassistant.py` with a `Module` class that fetches
-sensor states from the HA REST API and returns them as scenes. Enable it in
-`config.json` with your `ha_url` and `ha_token`. Use a daemon thread for the
-HTTP fetch and cache results so the render loop is never blocked.
+**Finding your `org_id`:** Visit `claude.ai/settings/usage`, open DevTools → Network, and look for the request to `/api/organizations/<org_id>/usage` — the UUID in that URL is your org ID.
