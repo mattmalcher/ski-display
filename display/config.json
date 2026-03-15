@@ -39,6 +39,13 @@
       "fetch_interval": 30
     },
     {
+      "name": "google_calendar",
+      "enabled": false,
+      "ical_url": "https://calendar.google.com/calendar/ical/YOUR_SECRET_URL/basic.ics",
+      "days_ahead": 7,
+      "fetch_interval": 900
+    },
+    {
       "name": "notable_dates",
       "enabled": false,
       "dates": [
