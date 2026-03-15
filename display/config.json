@@ -49,16 +49,9 @@
       "ttl": 120
     },
     {
-      "name": "google_calendar",
+      "name": "ics",
       "enabled": false,
-      "ical_url": "https://calendar.google.com/calendar/ical/YOUR_SECRET_URL/basic.ics",
-      "days_ahead": 7,
-      "fetch_interval": 900
-    },
-    {
-      "name": "hotmail_calendar",
-      "enabled": false,
-      "ical_url": "https://outlook.live.com/owa/calendar/YOUR_ICS_URL/reachcalendar.ics",
+      "ical_url": "https://...",
       "days_ahead": 7,
       "fetch_interval": 900
     },
