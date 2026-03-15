@@ -88,6 +88,8 @@ Each data source is an independent module in `display/modules/`. Modules run ind
 | `priority` | int | Repeat count in rotation (default 1; higher = more frequent) |
 | `transition` | str | Override the auto-cycle transition for this scene |
 
+**Multiple instances:** You can add the same module name more than once in `config.json` — each entry gets its own independent instance. This is useful for e.g. showing events from two different `ics` calendars, or tracking two separate sets of `stock` symbols.
+
 **Adding a module:**
 
 1. Create `display/modules/yourmodule.py` with a class `Module(DisplayModule)`
