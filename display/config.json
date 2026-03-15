@@ -37,6 +37,31 @@
       "octoprint_url": "http://octopi.local",
       "api_key": "",
       "fetch_interval": 30
+    },
+    {
+      "name": "notable_dates",
+      "enabled": false,
+      "dates": [
+        {
+          "date": "2026-12-25",
+          "message": "Merry Christmas!",
+          "repeat": "annual",
+          "reminder_days": [7, 3, 1]
+        },
+        {
+          "date": "2026-06-15",
+          "message": "Summer hols begin",
+          "repeat": "none",
+          "reminder_days": [14, 7]
+        },
+        {
+          "date": "2026-03-19",
+          "message": "Recycling bins",
+          "repeat": "weekly",
+          "interval_weeks": 2,
+          "reminder_days": [1]
+        }
+      ]
     }
   ]
 }
