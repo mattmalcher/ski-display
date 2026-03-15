@@ -1,18 +1,20 @@
-"""Claude API usage module — shows monthly API spend and token usage.
+"""Claude.ai subscription usage module — shows message limit utilisation.
 
-Calls the Anthropic Admin API to fetch current-month cost and token usage,
-then displays them on the LED matrix. Limits reset on the 1st of each month.
-
-Requires an Admin API key (starting with sk-ant-admin...) which can be created
-in the Anthropic Console by an organisation admin.
+Calls the claude.ai internal usage API to fetch current utilisation for
+the 5-hour and 7-day rolling windows, and when each resets.
 
 Add to config.json:
     {
         "name": "claude_usage",
         "enabled": true,
-        "admin_api_key": "sk-ant-admin...",
-        "fetch_interval": 300
+        "session_key": "sk-ant-sid01-...",
+        "org_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "fetch_interval": 120
     }
+
+The session_key is the value of the 'sessionKey' cookie from claude.ai —
+find it in browser DevTools → Application → Cookies. It expires periodically
+so will need refreshing. The org_id is visible in the URL when logged in.
 """
 
 import json
@@ -26,41 +28,39 @@ from modules.base import DisplayModule
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = 'https://api.anthropic.com'
-_ANTHROPIC_VERSION = '2023-06-01'
+_USAGE_URL = 'https://claude.ai/api/organizations/{org_id}/usage'
+_USER_AGENT = (
+    'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0'
+)
 
 
-def _http_get(url: str, api_key: str, timeout: int = 15) -> dict:
-    req = urllib.request.Request(
-        url,
-        headers={
-            'x-api-key': api_key,
-            'anthropic-version': _ANTHROPIC_VERSION,
-        },
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode())
+def _fmt_reset(iso: str) -> str:
+    """Format a reset timestamp for display.
 
-
-def _parse_cost(value) -> float:
-    """Parse a cost value that may be a string (cents) or float (dollars)."""
+    Uses HH:MM for resets within 24 hours, otherwise '%-d %b' (e.g. '21 Mar').
+    """
     try:
-        # Anthropic reports costs as decimal strings in cents
-        return float(value) / 100.0
-    except (TypeError, ValueError):
-        return 0.0
+        dt = datetime.fromisoformat(iso).astimezone(timezone.utc)
+        now = datetime.now(timezone.utc)
+        delta = dt - now
+        if delta.total_seconds() < 86400:
+            return dt.strftime('%H:%M')
+        return dt.strftime('%-d %b')
+    except Exception:
+        return ''
 
 
 class Module(DisplayModule):
     def start(self):
-        self._api_key = self.config.get('admin_api_key', '')
-        self._fetch_interval = float(self.config.get('fetch_interval', 300))
+        self._session_key = self.config.get('session_key', '')
+        self._org_id = self.config.get('org_id', '')
+        self._fetch_interval = float(self.config.get('fetch_interval', 120))
         self._cache = None
         self._lock = threading.Lock()
         self._stop = threading.Event()
 
-        if not self._api_key:
-            logger.warning('claude_usage: no admin_api_key configured')
+        if not self._session_key or not self._org_id:
+            logger.warning('claude_usage: session_key and org_id are required')
             return
 
         t = threading.Thread(target=self._fetch_loop, daemon=True)
@@ -78,32 +78,46 @@ class Module(DisplayModule):
 
         try:
             scenes = []
-            cost_usd = data.get('cost_usd', 0.0)
-            input_tokens = data.get('input_tokens', 0)
-            output_tokens = data.get('output_tokens', 0)
-            reset_label = data.get('reset_label', '')
 
-            # Cost scene: "Claude $1.23 resets 1 Apr"
-            cost_text = f'Claude ${cost_usd:.2f}'
-            if reset_label:
-                cost_text += f' resets {reset_label}'
-            scenes.append({
-                'type': 'scroll',
-                'text': cost_text,
-                'speed': 30,
-                'ttl': self._fetch_interval * 2,
-            })
+            five_h = data.get('five_hour') or {}
+            seven_d = data.get('seven_day') or {}
 
-            # Token scene: "Claude 42k in 8k out"
-            total_in = input_tokens // 1000
-            total_out = output_tokens // 1000
-            if input_tokens or output_tokens:
-                tok_text = f'Claude {total_in}k in {total_out}k out'
+            if five_h.get('utilization') is not None:
+                pct = five_h['utilization']
+                reset = _fmt_reset(five_h.get('resets_at', ''))
+                text = f'Claude 5h {pct:.0f}%'
+                if reset:
+                    text += f' resets {reset}'
                 scenes.append({
                     'type': 'scroll',
-                    'text': tok_text,
+                    'text': text,
                     'speed': 30,
-                    'ttl': self._fetch_interval * 2,
+                    'ttl': self._fetch_interval * 3,
+                })
+
+            if seven_d.get('utilization') is not None:
+                pct = seven_d['utilization']
+                reset = _fmt_reset(seven_d.get('resets_at', ''))
+                text = f'Claude 7d {pct:.0f}%'
+                if reset:
+                    text += f' resets {reset}'
+                scenes.append({
+                    'type': 'scroll',
+                    'text': text,
+                    'speed': 30,
+                    'ttl': self._fetch_interval * 3,
+                })
+
+            extra = data.get('extra_usage') or {}
+            if extra.get('is_enabled') and extra.get('monthly_limit'):
+                used = extra.get('used_credits', 0) or 0
+                limit = extra['monthly_limit']
+                text = f'Claude extra {used:.0f}/{limit} credits'
+                scenes.append({
+                    'type': 'scroll',
+                    'text': text,
+                    'speed': 30,
+                    'ttl': self._fetch_interval * 3,
                 })
 
             return scenes
@@ -119,6 +133,13 @@ class Module(DisplayModule):
         while not self._stop.is_set():
             try:
                 self._fetch_usage()
+            except urllib.error.HTTPError as exc:
+                if exc.code == 401:
+                    logger.error(
+                        'claude_usage: session expired — update session_key in config'
+                    )
+                else:
+                    logger.warning('claude_usage: HTTP %d', exc.code)
             except urllib.error.URLError as exc:
                 logger.warning('claude_usage: network error: %s', exc)
             except Exception:
@@ -126,54 +147,29 @@ class Module(DisplayModule):
             self._stop.wait(self._fetch_interval)
 
     def _fetch_usage(self):
-        now = datetime.now(timezone.utc)
-
-        # Current month window
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        starting_at = month_start.strftime('%Y-%m-%dT%H:%M:%SZ')
-        ending_at = now.strftime('%Y-%m-%dT%H:%M:%SZ')
-
-        # Reset is the 1st of next month
-        if now.month == 12:
-            reset_dt = now.replace(year=now.year + 1, month=1, day=1,
-                                   hour=0, minute=0, second=0, microsecond=0)
-        else:
-            reset_dt = now.replace(month=now.month + 1, day=1,
-                                   hour=0, minute=0, second=0, microsecond=0)
-        reset_label = reset_dt.strftime('%-d %b')  # e.g. "1 Apr"
-
-        # --- Cost report ---
-        cost_url = (
-            f'{_BASE_URL}/v1/organizations/cost_report'
-            f'?starting_at={starting_at}&ending_at={ending_at}'
+        url = _USAGE_URL.format(org_id=self._org_id)
+        req = urllib.request.Request(
+            url,
+            headers={
+                'User-Agent': _USER_AGENT,
+                'Accept': '*/*',
+                'Accept-Language': 'en-GB,en;q=0.9',
+                'Referer': 'https://claude.ai/settings/usage',
+                'anthropic-client-platform': 'web_claude_ai',
+                'Cookie': f'sessionKey={self._session_key}',
+                'DNT': '1',
+            },
         )
-        cost_data = _http_get(cost_url, self._api_key)
-        total_cost_usd = sum(
-            _parse_cost(item.get('cost', 0))
-            for item in cost_data.get('data', [])
-        )
-
-        # --- Usage report (token counts, bucketed daily) ---
-        usage_url = (
-            f'{_BASE_URL}/v1/organizations/usage_report/messages'
-            f'?starting_at={starting_at}&ending_at={ending_at}&bucket_width=1d'
-        )
-        usage_data = _http_get(usage_url, self._api_key)
-        input_tokens = 0
-        output_tokens = 0
-        for bucket in usage_data.get('data', []):
-            input_tokens += bucket.get('input_tokens', 0)
-            output_tokens += bucket.get('output_tokens', 0)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            payload = json.loads(resp.read().decode())
 
         with self._lock:
-            self._cache = {
-                'cost_usd': total_cost_usd,
-                'input_tokens': input_tokens,
-                'output_tokens': output_tokens,
-                'reset_label': reset_label,
-            }
+            self._cache = payload
 
+        five_h = payload.get('five_hour') or {}
+        seven_d = payload.get('seven_day') or {}
         logger.info(
-            'claude_usage: $%.2f this month, %dk in / %dk out tokens, resets %s',
-            total_cost_usd, input_tokens // 1000, output_tokens // 1000, reset_label,
+            'claude_usage: 5h=%.0f%% 7d=%.0f%%',
+            five_h.get('utilization', 0),
+            seven_d.get('utilization', 0),
         )
