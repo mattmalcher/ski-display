@@ -49,9 +49,9 @@
       "ttl": 120
     },
     {
-      "name": "google_calendar",
+      "name": "ics",
       "enabled": false,
-      "ical_url": "https://calendar.google.com/calendar/ical/YOUR_SECRET_URL/basic.ics",
+      "ical_url": "https://...",
       "days_ahead": 7,
       "fetch_interval": 900
     },
