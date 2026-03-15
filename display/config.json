@@ -39,6 +39,15 @@
       "fetch_interval": 30
     },
     {
+      "name": "home_assistant",
+      "enabled": false,
+      "ha_url": "http://homeassistant.local:8123",
+      "token": "your-long-lived-access-token",
+      "entity_ids": ["sensor.living_room_temperature"],
+      "fetch_interval": 60,
+      "ttl": 120
+    },
+    {
       "name": "google_calendar",
       "enabled": false,
       "ical_url": "https://calendar.google.com/calendar/ical/YOUR_SECRET_URL/basic.ics",
