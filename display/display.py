@@ -42,6 +42,24 @@ FRAME_TIME   = 0.016  # ~60 fps target
 _CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
 
 
+def _is_off_time(off_windows: list) -> bool:
+    """Return True if the current time falls within any configured off window."""
+    now = datetime.datetime.now().time()
+    for window in off_windows:
+        try:
+            start = datetime.time.fromisoformat(window['start'])
+            end   = datetime.time.fromisoformat(window['end'])
+        except (KeyError, ValueError):
+            continue
+        if start <= end:
+            if start <= now < end:
+                return True
+        else:  # spans midnight (e.g. 23:00–07:00)
+            if now >= start or now < end:
+                return True
+    return False
+
+
 def load_config() -> dict:
     try:
         with open(_CONFIG_FILE) as f:
@@ -247,6 +265,7 @@ def main():
     refresh_interval = dcfg.get('scheduler_refresh_interval', 5.0)
 
     device.contrast(contrast)
+    off_windows = dcfg.get('off_times', [])
 
     modules   = load_modules(config)
     scheduler = SceneScheduler(modules, refresh_interval=refresh_interval)
@@ -259,6 +278,15 @@ def main():
     disp = Buf()
 
     while True:
+        if off_windows and _is_off_time(off_windows):
+            logger.info('Off-time: blanking display')
+            push(Buf())
+            while _is_off_time(off_windows):
+                time.sleep(30)
+            logger.info('Off-time ended: resuming')
+            si = 0
+            continue
+
         scene = scheduler[si]
 
         # Build target buffer for transition

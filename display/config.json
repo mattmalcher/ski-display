@@ -3,7 +3,10 @@
     "scroll_speed": 36,
     "frame_time": 0.016,
     "contrast": 3,
-    "scheduler_refresh_interval": 5.0
+    "scheduler_refresh_interval": 5.0,
+    "off_times": [
+      {"start": "00:00", "end": "07:00"}
+    ]
   },
   "modules": [
     {
