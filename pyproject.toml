@@ -7,4 +7,6 @@ dependencies = [
     "flask",
     "rpi-lgpio",
     "yfinance",
+    "icalendar",
+    "recurring-ical-events",
 ]
