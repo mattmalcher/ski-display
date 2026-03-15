@@ -2,7 +2,7 @@
 """LED Matrix Display — 4× MAX7219, 32×8 px.
 
 Scene types: static / scroll / clock
-Icons and animations can be prefixed to any scene (see icons.py, animations.py).
+Icons and animations can be prefixed to any scene (see animations.py).
 Transitions are pluggable (see transitions.py).
 Modules provide scenes independently (see modules/).
 """
@@ -21,7 +21,6 @@ from luma.core.interface.serial import spi
 from luma.led_matrix.device import max7219
 
 from font import FONT
-from icons import ICONS
 from animations import ANIMATIONS
 from transitions import TRANSITIONS, _ease, register as register_transition  # noqa: F401
 from scheduler import SceneScheduler
@@ -156,15 +155,6 @@ def draw_bitmap(buf, cols: list, col: int, row: int = 0) -> int:
     return len(cols)
 
 
-def draw_icon(buf, name: str, col: int, row: int = 0) -> int:
-    """Draw a named icon. Returns pixel width consumed (0 if icon not found)."""
-    glyph = ICONS.get(name)
-    if not glyph:
-        logger.debug('Icon not found: %s', name)
-        return 0
-    return draw_bitmap(buf, glyph, col, row)
-
-
 def draw_animation_frame(buf, name: str, elapsed: float, fps: float,
                           col: int, row: int = 0) -> int:
     """Draw the current frame of a named animation. Returns pixel width consumed."""
@@ -191,17 +181,11 @@ def apply_transition(disp, frm, to, kind, p):
 
 def _draw_prefix(buf, scene, elapsed) -> int:
     """Draw icon or animation prefix. Returns starting column for text."""
-    anim = scene.get('animation')
-    if anim:
+    name = scene.get('animation') or scene.get('icon')
+    if name:
         fps = scene.get('anim_fps', 4)
-        w = draw_animation_frame(buf, anim, elapsed, fps, col=1)
+        w = draw_animation_frame(buf, name, elapsed, fps, col=1)
         return 1 + w + 1 if w else 0
-
-    icon = scene.get('icon')
-    if icon:
-        w = draw_icon(buf, icon, col=1)
-        return 1 + w + 1 if w else 0
-
     return 0  # no prefix
 
 
