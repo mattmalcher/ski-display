@@ -56,6 +56,12 @@
       "fetch_interval": 900
     },
     {
+      "name": "claude_usage",
+      "enabled": false,
+      "admin_api_key": "sk-ant-admin...",
+      "fetch_interval": 300
+    },
+    {
       "name": "notable_dates",
       "enabled": false,
       "dates": [
