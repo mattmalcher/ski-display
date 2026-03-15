@@ -56,6 +56,13 @@
       "fetch_interval": 900
     },
     {
+      "name": "claude_usage",
+      "enabled": false,
+      "session_key": "sk-ant-sid01-...",
+      "org_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "fetch_interval": 120
+    },
+    {
       "name": "notable_dates",
       "enabled": false,
       "dates": [
