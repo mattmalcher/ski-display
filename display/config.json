@@ -56,6 +56,13 @@
       "fetch_interval": 900
     },
     {
+      "name": "hotmail_calendar",
+      "enabled": false,
+      "ical_url": "https://outlook.live.com/owa/calendar/YOUR_ICS_URL/reachcalendar.ics",
+      "days_ahead": 7,
+      "fetch_interval": 900
+    },
+    {
       "name": "notable_dates",
       "enabled": false,
       "dates": [
