@@ -133,6 +133,39 @@ sudo systemctl status display-web
 journalctl -u display -f
 ```
 
+## Claude.ai usage module
+
+The `claude_usage` module displays your subscription's message limit utilisation and reset times:
+
+```
+Claude 5h 31% resets 15:00
+Claude 7d 16% resets 21 Mar
+```
+
+It polls the 5-hour and 7-day rolling windows every 2 minutes. Enable it in `config.json`:
+
+```json
+{
+  "name": "claude_usage",
+  "enabled": true,
+  "session_key": "sk-ant-sid01-...",
+  "org_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "fetch_interval": 120
+}
+```
+
+**Finding your `session_key`:**
+
+1. Log in to [claude.ai](https://claude.ai) in your browser
+2. Open DevTools (F12) → **Application** → **Cookies** → `https://claude.ai`
+3. Copy the value of the `sessionKey` cookie (starts with `sk-ant-sid01-`)
+
+The cookie expires roughly every 30 days. When it does the display silently stops showing Claude scenes and logs `session expired — update session_key in config`. Refresh it by repeating the steps above and updating `config.json`.
+
+**Finding your `org_id`:**
+
+Visit `claude.ai/settings/usage`, open DevTools → **Network**, and look for the request to `/api/organizations/<org_id>/usage` — the UUID in that URL is your org ID.
+
 ## Home Assistant integration
 
 Create `display/modules/homeassistant.py` with a `Module` class that fetches

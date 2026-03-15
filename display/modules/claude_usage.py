@@ -12,9 +12,24 @@ Add to config.json:
         "fetch_interval": 120
     }
 
-The session_key is the value of the 'sessionKey' cookie from claude.ai —
-find it in browser DevTools → Application → Cookies. It expires periodically
-so will need refreshing. The org_id is visible in the URL when logged in.
+--- Finding your session_key ---
+
+1. Log in to claude.ai in your browser
+2. Open DevTools (F12) → Application tab → Storage → Cookies → https://claude.ai
+3. Find the cookie named 'sessionKey' and copy its value (starts with sk-ant-sid01-)
+4. Paste it into config.json as 'session_key'
+
+The cookie expires roughly every 30 days. When it does the module logs:
+    "claude_usage: session expired — update session_key in config"
+and silently produces no scenes until you refresh it using the steps above.
+
+--- Finding your org_id ---
+
+Log in to claude.ai and look at the URL when you open any conversation or
+visit settings — it contains your org UUID, e.g.:
+    https://claude.ai/settings/usage
+Then check the network request to /api/organizations/<org_id>/usage in
+DevTools → Network, or look at the URL bar after navigating to a conversation.
 """
 
 import json
